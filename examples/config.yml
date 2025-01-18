@@ -1,0 +1,26 @@
+# Database connection settings
+database:
+  host: localhost
+  port: 5432
+  dbname: your_database
+  user: your_username
+  password: your_password  # Consider using environment variables in production
+
+# Query files to compare
+queries:
+  original: ./queries/original.sql
+  optimized: ./queries/optimized.sql
+
+# Output settings
+output:
+  report_dir: ./reports
+
+# Analysis settings (optional)
+analysis:
+  runs: 3                # Number of times to run each query
+  include_plans: true    # Include execution plans in report
+  collect_metrics:       # Metrics to collect
+    cpu: true
+    io: true
+    memory: true
+    indexes: true

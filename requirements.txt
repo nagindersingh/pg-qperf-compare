@@ -1,0 +1,8 @@
+psycopg2-binary>=2.9.9
+PyYAML>=6.0.1
+Jinja2>=3.1.2
+dataclasses>=0.6; python_version < '3.7'
+
+# Test dependencies
+pytest>=7.4.3
+pytest-cov>=4.1.0

@@ -1,10 +1,10 @@
 # Database connection settings
 database:
-  host: dme-prod.cvfear9vkqdr.us-west-2.rds.amazonaws.com
+  host: 127.0.0.1
   port: 5432
-  dbname: medsouth
+  dbname: reporting
   user: dme
-  password: dme-bonafide  # Consider using environment variables in production
+  password: *********  # Consider using environment variables in production
 
 # Query files to compare
 queries:

@@ -219,6 +219,10 @@ class QueryAnalyzer:
         html_path.write_text(html_report)
         text_path.write_text(text_report)
         
+        # Get absolute paths for reports
+        abs_html_path = html_path.resolve()
+        abs_text_path = text_path.resolve()
+        
         print("\nReports generated:")
-        print(f"- HTML report: {html_path}")
+        print(f"- HTML report: \x1b]8;;file://{abs_html_path}\x1b\\{html_path}\x1b]8;;\x1b\\")  # Clickable link
         print(f"- Text report: {text_path}")

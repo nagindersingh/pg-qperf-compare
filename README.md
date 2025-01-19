@@ -101,24 +101,32 @@ The tool provides comprehensive analysis of:
 ```
 pg-qperf-compare/
 ├── src/
-│   ├── core/           # Core analysis functionality
-│   │   ├── analyzer.py # Query analysis logic
-│   │   ├── database.py # Database connection handling
-│   │   └── metrics.py  # Metrics extraction and processing
-│   ├── utils/          # Utility modules
-│   │   ├── config.py   # Configuration management
-│   │   └── logger.py   # Logging setup
-│   ├── reports/        # Report generation
-│   │   ├── generator.py
-│   │   └── templates/
-│   └── cli.py         # Command-line interface
-├── tests/             # Test suite
-│   ├── conftest.py    # Test fixtures
+│   ├── core/              # Core analysis functionality
+│   │   ├── __init__.py
+│   │   ├── analyzer.py    # Query analysis logic
+│   │   ├── database.py    # Database connection handling
+│   │   ├── metrics.py     # Metrics extraction and processing
+│   │   └── models.py      # Data models and types
+│   ├── utils/             # Utility modules
+│   │   ├── __init__.py
+│   │   ├── config.py      # Configuration management
+│   │   └── report.py      # Report generation
+│   └── cli.py            # Command line interface
+├── tests/                # Test suite
+│   ├── __init__.py
 │   ├── test_analyzer.py
 │   ├── test_config.py
 │   └── test_metrics.py
-├── examples/          # Example queries and configs
-└── requirements.txt   # Project dependencies
+├── examples/             # Example queries and configurations
+│   ├── config.yml        # Sample configuration
+│   ├── setup.sql         # Database setup script
+│   └── queries/          # Sample queries to analyze
+│       ├── original.sql
+│       └── optimized.sql
+├── reports/             # Generated performance reports
+├── requirements.txt     # Project dependencies
+└── README.md           # Project documentation
+```
 
 ## Installation
 

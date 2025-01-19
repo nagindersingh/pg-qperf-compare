@@ -1,91 +1,61 @@
-WITH base_inventory AS (
-    SELECT i.*
-    FROM invtory i
-    WHERE i.partno LIKE '%DM%'
-),
-inventory_agg AS (
-    SELECT 
-        i.make,
-        i.partno,
-        i.office,
-        i.invtype,
-        i.selluom,
-        SUM(i.onhandqty) as total_onhand,
-        SUM(i.shelfqty) as total_shelf,
-        SUM(i.secondaryshelfqty) as total_secondary,
-        SUM(i.tertiaryshelfqty) as total_tertiary,
-        SUM(i.fourthlyshelfqty) as total_fourthly,
-        SUM(CASE WHEN i.secondaryshelfdisabled THEN i.secondaryshelfqty * COALESCE(i.eaqty, 1) ELSE 0 END) as secondary_disabled,
-        SUM(CASE WHEN i.tertiaryshelfdisabled THEN i.tertiaryshelfqty * COALESCE(i.eaqty, 1) ELSE 0 END) as tertiary_disabled,
-        SUM(CASE WHEN i.fourthlyshelfdisabled THEN i.fourthlyshelfqty * COALESCE(i.eaqty, 1) ELSE 0 END) as fourthly_disabled
-    FROM base_inventory i
-    GROUP BY i.make, i.partno, i.office, i.invtype, i.selluom
-)
+-- Original query for DM parts inventory
+-- This query retrieves inventory information for parts containing 'DM' in their part numbers
+
 SELECT DISTINCT 
-    t.make AS title_make,
-    t.partno AS title_partno,
-    t.inactive AS title_inactive,
-    t.description AS title_description,
-    t.nsr AS title_nsr,
-    i.invtype AS invtory_invtype,
-    i.selluom AS invtory_selluom,
-    i.total_onhand AS invtory_qty,
-    COALESCE(i.total_shelf, 0) AS shelfqty,
-    COALESCE(i.total_secondary, 0) AS secondaryshelfqty,
-    COALESCE(i.total_tertiary, 0) AS tertiaryshelfqty,
-    COALESCE(i.total_fourthly, 0) AS fourthlyshelfqty,
-    COALESCE(i.secondary_disabled, 0) AS secondaryshelfdisabledqty,
-    COALESCE(i.tertiary_disabled, 0) AS tertiaryshelfdisabledqty,
-    COALESCE(i.fourthly_disabled, 0) AS fourthlyshelfdisabledqty,
-    CASE 
-        WHEN i.selluom = q.selluom THEN q.onhandqty
-        ELSE q.onhandqty / COALESCE((
-            SELECT ratio 
-            FROM titleconversion tc 
-            WHERE tc.make = t.make 
-            AND tc.partno = t.partno 
-            AND tc.selluom = i.selluom 
-            AND tc.invqtyuom = q.selluom
-            LIMIT 1
-        ), 1)
-    END AS invqty_onhandqty,
-    CASE 
-        WHEN i.selluom = q.selluom THEN q.committedqty
-        ELSE q.committedqty / COALESCE((
-            SELECT ratio 
-            FROM titleconversion tc 
-            WHERE tc.make = t.make 
-            AND tc.partno = t.partno 
-            AND tc.selluom = i.selluom 
-            AND tc.invqtyuom = q.selluom
-            LIMIT 1
-        ), 1)
-    END AS invqty_committedqty,
-    CASE 
-        WHEN i.selluom = q.selluom THEN q.backorder
-        ELSE q.backorder / COALESCE((
-            SELECT ratio 
-            FROM titleconversion tc 
-            WHERE tc.make = t.make 
-            AND tc.partno = t.partno 
-            AND tc.selluom = i.selluom 
-            AND tc.invqtyuom = q.selluom
-            LIMIT 1
-        ), 1)
-    END AS invqty_backorder,
-    q.selluom AS invqty_selluom,
-    i.office
-FROM inventory_agg i
-INNER JOIN title t ON 
-    t.make = i.make AND 
-    t.partno = i.partno
-INNER JOIN invqty q ON 
-    q.make = i.make AND 
-    q.partno = i.partno AND 
-    q.office = i.office
-WHERE POSITION(i.selluom IN COALESCE(t.hideuom, '')) <= 0
+    TITLE.MAKE AS TITLE_MAKE,
+    TITLE.PARTNO AS TITLE_PARTNO,
+    TITLE.INACTIVE AS TITLE_INACTIVE,
+    TITLE.DESCRIPTION AS TITLE_DESCRIPTION,
+    TITLE.NSR AS TITLE_NSR,
+    INVTORY.INVTYPE AS INVTORY_INVTYPE,
+    INVTORY.SELLUOM AS INVTORY_SELLUOM,
+    SUM(INVTORY.ONHANDQTY) AS INVTORY_QTY,
+    COALESCE(sum(INVTORY.SHELFQTY),0) AS SHELFQTY,
+    COALESCE(sum(INVTORY.SECONDARYSHELFQTY),0) AS SECONDARYSHELFQTY,
+    COALESCE(sum(INVTORY.TERTIARYSHELFQTY),0) AS TERTIARYSHELFQTY,
+    COALESCE(sum(INVTORY.FOURTHLYSHELFQTY),0) AS FOURTHLYSHELFQTY,
+    COALESCE(sum((CASE WHEN INVTORY.SECONDARYSHELFDISABLED THEN INVTORY.SECONDARYSHELFQTY ELSE 0 END ) * COALESCE(INVTORY.EAQTY,1)), 0) AS SECONDARYSHELFDISABLEDQTY,
+    COALESCE(sum((CASE WHEN INVTORY.TERTIARYSHELFDISABLED THEN INVTORY.TERTIARYSHELFQTY ELSE 0 END ) * COALESCE(INVTORY.EAQTY,1)), 0) AS TERTIARYSHELFDISABLEDQTY,
+    COALESCE(sum((CASE WHEN INVTORY.FOURTHLYSHELFDISABLED THEN INVTORY.FOURTHLYSHELFQTY ELSE 0 END ) * COALESCE(INVTORY.EAQTY,1)), 0) AS FOURTHLYSHELFDISABLEDQTY,
+    (case when INVTORY.selluom = INVQTY.selluom then INVQTY.ONHANDQTY 
+          else (INVQTY.ONHANDQTY  /  coalesce((select ratio from titleconversion
+                where make = TITLE.MAKE and partno = TITLE.PARTNO and selluom = INVTORY.SELLUOM and invqtyuom = invqty.selluom), 1))
+     end ) as INVQTY_ONHANDQTY,
+    (case when INVTORY.selluom = INVQTY.selluom then INVQTY.COMMITTEDQTY 
+          else (INVQTY.COMMITTEDQTY  /  coalesce((select ratio from titleconversion
+                where make = TITLE.MAKE and partno = TITLE.PARTNO and selluom = INVTORY.SELLUOM and invqtyuom = invqty.selluom), 1))
+     end ) as INVQTY_COMMITTEDQTY,
+    (case when INVTORY.selluom = INVQTY.selluom then INVQTY.BACKORDER 
+          else (INVQTY.BACKORDER  /  coalesce((select ratio from titleconversion
+                where make = TITLE.MAKE and partno = TITLE.PARTNO and selluom = INVTORY.SELLUOM and invqtyuom = invqty.selluom), 1))
+     end ) as INVQTY_BACKORDER,
+    INVQTY.SELLUOM AS INVQTY_SELLUOM,
+    INVTORY.OFFICE AS OFFICE 
+FROM INVTORY,
+     TITLE,
+     INVQTY
+WHERE INVTORY.PARTNO LIKE '%DM%'
+    AND INVTORY.MAKE = TITLE.MAKE
+    AND INVTORY.PARTNO = TITLE.PARTNO
+    AND INVTORY.MAKE = INVQTY.MAKE
+    AND INVTORY.PARTNO = INVQTY.PARTNO
+    AND INVTORY.OFFICE = INVQTY.OFFICE
+    AND POSITION(INVTORY.SELLUOM IN COALESCE(TITLE.HIDEUOM, ''))<=0
+GROUP BY 
+    TITLE.MAKE,
+    TITLE.PARTNO,
+    TITLE.INACTIVE,
+    TITLE.DESCRIPTION,
+    TITLE.NSR,
+    INVTORY.INVTYPE,
+    INVTORY.SELLUOM,
+    INVQTY.ONHANDQTY,
+    INVQTY.COMMITTEDQTY,
+    INVQTY.BACKORDER,
+    INVQTY.SELLUOM,
+    INVTORY.OFFICE
 ORDER BY 
-    title_make,
-    title_partno,
-    invtory_invtype,
-    invtory_qty;
+    TITLE_MAKE,
+    TITLE_PARTNO,
+    INVTORY_INVTYPE,
+    INVTORY_QTY;

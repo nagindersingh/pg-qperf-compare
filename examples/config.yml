@@ -1,26 +1,11 @@
 # Database connection settings
 database:
-  host: 127.0.0.1
+  host: localhost
   port: 5432
-  dbname: reporting
-  user: dme
-  password: *********  # Consider using environment variables in production
+  dbname: test
+  user: test
+  password: test  # Consider using environment variables in production
 
 # Query files to compare
-queries:
-  original: /Users/nagindersingh/dev/pg-qperf-compare/examples/queries/original.sql
-  optimized: /Users/nagindersingh/dev/pg-qperf-compare/examples/queries/optimized.sql
-
-# Output settings
-output:
-  report_dir: ./reports
-
-# Analysis settings (optional)
-analysis:
-  runs: 3                # Number of times to run each query
-  include_plans: true    # Include execution plans in report
-  collect_metrics:       # Metrics to collect
-    cpu: true
-    io: true
-    memory: true
-    indexes: true
+original_query: examples/queries/original.sql
+optimized_query: examples/queries/optimized.sql

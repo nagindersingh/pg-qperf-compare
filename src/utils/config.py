@@ -1,6 +1,5 @@
 """
-Configuration management for pg-qperf-compare.
-Handles loading and validation of YAML config files.
+Configuration loading utilities for pg-qperf-compare.
 """
 from typing import Dict, Any
 from pathlib import Path
@@ -11,33 +10,50 @@ from ..core.database import DatabaseConfig
 
 @dataclass
 class AppConfig:
+    """Application configuration."""
     database: DatabaseConfig
-    queries: Dict[str, Path]
-    output_dir: Path
+    original_query: Path
+    optimized_query: Path
 
 class ConfigLoader:
+    """Loads and validates configuration from YAML files."""
+    
     @staticmethod
-    def load(config_path: Path) -> AppConfig:
-        """Load and validate config from YAML file."""
+    def load_config(config_path: Path) -> AppConfig:
+        """Load configuration from YAML file."""
+        if not config_path.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+        
         with open(config_path) as f:
             config_data = yaml.safe_load(f)
         
+        # Validate required fields
+        required_fields = ['database', 'original_query', 'optimized_query']
+        for field in required_fields:
+            if field not in config_data:
+                raise ValueError(f"Missing required field in config: {field}")
+        
+        # Load database config
         db_config = DatabaseConfig(
-            host=config_data['database']['host'],
-            port=config_data['database']['port'],
+            host=config_data['database'].get('host', 'localhost'),
+            port=config_data['database'].get('port', 5432),
             dbname=config_data['database']['dbname'],
             user=config_data['database']['user'],
-            password=config_data['database']['password']
+            password=config_data['database'].get('password', '')
         )
         
-        queries = {
-            k: Path(v) for k, v in config_data['queries'].items()
-        }
+        # Convert query paths to Path objects
+        original_query = Path(config_data['original_query'])
+        optimized_query = Path(config_data['optimized_query'])
         
-        output_dir = Path(config_data.get('output', {}).get('report_dir', './reports'))
+        # Validate query files exist
+        if not original_query.exists():
+            raise FileNotFoundError(f"Original query file not found: {original_query}")
+        if not optimized_query.exists():
+            raise FileNotFoundError(f"Optimized query file not found: {optimized_query}")
         
         return AppConfig(
             database=db_config,
-            queries=queries,
-            output_dir=output_dir
+            original_query=original_query,
+            optimized_query=optimized_query
         )

@@ -12,6 +12,66 @@ A powerful tool for analyzing and comparing PostgreSQL query performance, helpin
 - Smart index recommendations based on query patterns
 - Export raw data in JSON format for further analysis
 
+## Development Setup
+
+### Database Setup
+1. Prerequisites:
+   - PostgreSQL installed and running
+   - `psql` command-line tool available
+
+2. Create test database and user:
+   ```bash
+   # Create test user
+   createuser -s test
+
+   # Create test database
+   createdb test
+   ```
+
+3. Load sample data:
+   ```bash
+   # Load the sample schema and data
+   psql -U test -d test -f examples/setup.sql
+   ```
+
+4. Configure database connection:
+   ```yaml
+   # examples/config.yml
+   database:
+     host: localhost
+     port: 5432
+     dbname: test
+     user: test
+     password: test  # Use environment variables in production
+   ```
+
+### Git Hooks
+The project uses git hooks to ensure code quality. After cloning the repository:
+
+1. The pre-commit hook will automatically run tests before each commit:
+   ```bash
+   # The hook will:
+   - Run pytest
+   - Block the commit if any tests fail
+   - Allow the commit if all tests pass
+   ```
+
+2. If you need to bypass the pre-commit hook in exceptional cases:
+   ```bash
+   git commit --no-verify -m "Your commit message"
+   ```
+
+### Running Tests
+Tests can be run manually using:
+```bash
+python -m pytest
+```
+
+This will:
+- Run all test cases
+- Generate a coverage report
+- Show test execution summary
+
 ## Performance Analysis
 The tool provides comprehensive analysis of:
 
@@ -59,7 +119,6 @@ pg-qperf-compare/
 │   └── test_metrics.py
 ├── examples/          # Example queries and configs
 └── requirements.txt   # Project dependencies
-```
 
 ## Installation
 
@@ -140,19 +199,6 @@ The HTML report provides:
    - Index suggestions
    - Query structure improvements
    - Configuration adjustments
-
-## Testing
-
-The project uses pytest for testing. The test suite includes:
-
-- Unit tests for all core components
-- Integration tests for database operations
-- Fixtures for common test scenarios
-
-Run tests with:
-```bash
-pytest tests/
-```
 
 ## Contributing
 

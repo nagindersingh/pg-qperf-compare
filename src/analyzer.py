@@ -8,6 +8,7 @@ import psycopg2
 import yaml
 from datetime import datetime
 import json
+import re
 
 class QueryAnalyzer:
     """Analyzes and compares query performance"""
@@ -889,572 +890,11 @@ class QueryAnalyzer:
             metrics_data = self.analyze_queries()
             
         # Get problems and recommendations
-        original_problems = self.analyze_plan_problems(metrics_data['original']['raw_plan'])
-        optimized_problems = self.analyze_plan_problems(metrics_data['optimized']['raw_plan'])
-        index_recommendations = self.get_index_recommendations(
-            metrics_data['original']['raw_plan'],
-            metrics_data['optimized']['raw_plan']
-        )
-        
-        # Calculate differences
-        differences = []
-        
-        # Compare planning time
-        orig_planning = metrics_data['original'].get('planning_time', 0)
-        opt_planning = metrics_data['optimized'].get('planning_time', 0)
-        if orig_planning != opt_planning:
-            differences.append({
-                'type': 'planning_time',
-                'original': orig_planning,
-                'optimized': opt_planning,
-                'change': self._format_change(orig_planning, opt_planning)
-            })
-        
-        # Compare execution time
-        orig_execution = metrics_data['original'].get('execution_time', 0)
-        opt_execution = metrics_data['optimized'].get('execution_time', 0)
-        if orig_execution != opt_execution:
-            differences.append({
-                'type': 'execution_time',
-                'original': orig_execution,
-                'optimized': opt_execution,
-                'change': self._format_change(orig_execution, opt_execution)
-            })
-        
-        # Compare total time
-        orig_total = orig_planning + orig_execution
-        opt_total = opt_planning + opt_execution
-        if orig_total != opt_total:
-            differences.append({
-                'type': 'total_time',
-                'original': orig_total,
-                'optimized': opt_total,
-                'change': self._format_change(orig_total, opt_total)
-            })
-        
-        # Compare row counts
-        orig_rows = metrics_data['original'].get('row_count', 0)
-        opt_rows = metrics_data['optimized'].get('row_count', 0)
-        if orig_rows != opt_rows:
-            differences.append({
-                'type': 'rows',
-                'original': orig_rows,
-                'optimized': opt_rows,
-                'change': self._format_change(orig_rows, opt_rows)
-            })
-        
-        # Generate sections
-        exec_summary = self._generate_executive_summary_html(metrics_data, differences)
-        perf_metrics = self._format_performance_metrics_html(metrics_data)
-        query_stats = self._format_query_stats_html(metrics_data)
-        plan_analysis = self._format_plan_analysis_html(metrics_data)
-        problems = self._format_problems_section_html(original_problems, optimized_problems, index_recommendations)
-        
-        # Combine all sections
-        html = [
-            "<!DOCTYPE html>",
-            "<html>",
-            "<head>",
-            "<meta charset='utf-8'>",
-            "<title>PostgreSQL Query Performance Analysis Report</title>",
-            "<style>",
-            "body { font-family: monospace; line-height: 1.4; margin: 20px; }",
-            "h1, h2, h3, h4 { color: #333; margin: 1em 0 0.5em 0; }",
-            "h1 { border-bottom: 2px solid #333; padding-bottom: 0.2em; }",
-            "h2 { border-bottom: 1px solid #666; }",
-            "table { border-collapse: collapse; width: 100%; margin: 1em 0; }",
-            "th, td { text-align: left; padding: 0.3em 1em; font-family: monospace; }",
-            "th { border-bottom: 1px solid #666; }",
-            ".metric-table td:first-child { width: 200px; }",
-            ".metric-table td:nth-child(2), .metric-table td:nth-child(3) { text-align: right; width: 100px; }",
-            ".metric-table td:nth-child(4) { text-align: left; padding-left: 2em; }",
-            ".improvement { color: #28a745; }",
-            ".warning { color: #dc3545; }",
-            "div.improvement, div.warning { padding: 0.5em; margin: 0.5em 0; }",
-            "div.improvement h3, div.warning h3 { color: inherit; margin: 0; }",
-            "ul { list-style-type: none; padding-left: 0; margin: 0.5em 0; }",
-            "li { margin: 0.2em 0; }",
-            ".plan-table { font-family: monospace; }",
-            ".plan-table td:first-child { white-space: pre; }",
-            "pre { background-color: #f8f9fa; padding: 1em; border-radius: 4px; overflow-x: auto; }",
-            "code { font-family: monospace; }",
-            "</style>",
-            "</head>",
-            "<body>",
-            "<h1>PostgreSQL Query Performance Analysis Report</h1>",
-            f"<p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
-            "<h2>Executive Summary</h2>",
-            exec_summary,
-            "<h2>Performance Metrics</h2>",
-            perf_metrics,
-            "<h2>Query Statistics</h2>",
-            query_stats,
-            "<h2>Execution Plan Analysis</h2>",
-            plan_analysis,
-            "<h2>Problems and Recommendations</h2>",
-            problems,
-            "</body>",
-            "</html>"
-        ]
-        
-        return '\n'.join(html)
-
-    def _format_metrics_section_html(self, section_name, metrics):
-        """Format metrics section as HTML table"""
-        html = [
-            "<table class='metric-table'>",
-            "<tr>",
-            "<th>Metric</th>",
-            "<th>Original</th>",
-            "<th>Optimized</th>",
-            "<th>Change</th>",
-            "</tr>"
-        ]
-        
-        for metric in metrics:
-            html.append(
-                f"<tr><td>{metric['name']}</td>"
-                f"<td>{metric['original']}</td>"
-                f"<td>{metric['optimized']}</td>"
-                f"<td class='{metric['css_class']}'>{metric['improvement']}</td></tr>"
-            )
-        
-        html.append("</table>")
-        return '\n'.join(html)
-        
-    def _format_node_type_stats_html(self, stats):
-        """Format node type statistics as HTML table"""
-        html = [
-            "<h4>Node Type Statistics</h4>",
-            "<table>",
-            "<tr>",
-            "<th>Node Type</th>",
-            "<th>Count</th>",
-            "<th>Total Time</th>",
-            "<th>% of Query</th>",
-            "</tr>"
-        ]
-        
-        for stat in stats:
-            # Format cells to align with text report
-            node_type = stat['node_type'].ljust(30)
-            count = str(stat['count']).rjust(7)
-            total_time = f"{stat['total_time']:.3f} ms".rjust(12)
-            percentage = f"{stat['percentage']:.1f} %".rjust(10)
-            
-            html.append(
-                f"<tr>"
-                f"<td>{node_type}</td>"
-                f"<td>{count}</td>"
-                f"<td>{total_time}</td>"
-                f"<td>{percentage}</td>"
-                f"</tr>"
-            )
-            
-        html.append("</table>")
-        return '\n'.join(html)
-        
-    def _format_table_stats_html(self, stats):
-        """Format table statistics as HTML"""
-        html = ["<h4>Table Statistics</h4>"]
-        
-        for table_stat in stats:
-            # Table header
-            html.extend([
-                f"<h5>{table_stat['table']}</h5>",
-                f"<p>Total Time: {table_stat['total_time']:.3f} ms ({table_stat['percentage']:.1f}% of query)</p>",
-                "<table>",
-                "<tr>",
-                "<th>Scan Type</th>",
-                "<th>Count</th>",
-                "<th>Total Time</th>",
-                "<th>% of Table</th>",
-                "</tr>"
-            ])
-            
-            for scan in table_stat['scan_stats']:
-                # Format cells to align with text report
-                scan_type = scan['scan_type'].ljust(30)
-                count = str(scan['count']).rjust(7)
-                total_time = f"{scan['total_time']:.3f} ms".rjust(12)
-                percentage = f"{scan['percentage']:.1f} %".rjust(10)
-                
-                html.append(
-                    f"<tr>"
-                    f"<td>{scan_type}</td>"
-                    f"<td>{count}</td>"
-                    f"<td>{total_time}</td>"
-                    f"<td>{percentage}</td>"
-                    f"</tr>"
-                )
-            
-            html.extend(["</table>"])
-        
-        return '\n'.join(html)
-
-    def format_plan_text(self, plan, level=0):
-        """Format a plan node for text display"""
-        if isinstance(plan, list):
-            plan = plan[0]
-        if 'Plan' in plan:
-            plan = plan['Plan']
-            
-        lines = []
-        indent = "  " * level
-        
-        # Node type and basic info
-        node_type = plan.get('Node Type', 'Unknown')
-        relation = f" on {plan['Relation Name']}" if 'Relation Name' in plan else ""
-        lines.append(f"{indent}→ {node_type}{relation}")
-        
-        # Detailed metrics
-        details = []
-        
-        # Rows
-        if 'Actual Rows' in plan:
-            details.append(f"Rows: {plan['Actual Rows']:,}")
-            if 'Plan Rows' in plan:
-                estimate_ratio = plan['Actual Rows'] / plan['Plan Rows'] if plan['Plan Rows'] > 0 else float('inf')
-                details.append(f"Row Estimate: {plan['Plan Rows']:,} ({estimate_ratio:.1f}x)")
-        
-        # Time
-        if 'Actual Total Time' in plan:
-            details.append(f"Time: {self.format_time(plan['Actual Total Time'])}")
-            if 'Actual Startup Time' in plan:
-                details.append(f"Startup: {self.format_time(plan['Actual Startup Time'])}")
-        
-        # Cost
-        if 'Total Cost' in plan:
-            details.append(f"Cost: {plan['Total Cost']:.1f}")
-        
-        # Operation details
-        if plan.get('Index Name'):
-            details.append(f"Index: {plan['Index Name']}")
-        if plan.get('Hash Cond'):
-            details.append(f"Hash Cond: {plan['Hash Cond']}")
-        if plan.get('Index Cond'):
-            details.append(f"Index Cond: {plan['Index Cond']}")
-        if plan.get('Filter'):
-            details.append(f"Filter: {plan['Filter']}")
-            if plan.get('Rows Removed by Filter', 0) > 0:
-                details.append(f"Rows Filtered: {plan['Rows Removed by Filter']:,}")
-        
-        # Add details with proper indentation
-        for detail in details:
-            lines.append(f"{indent}  {detail}")
-        
-        # Process child nodes
-        if 'Plans' in plan:
-            for child in plan['Plans']:
-                lines.append("")  # Add spacing between nodes
-                lines.extend(self.format_plan_text(child, level + 1).split('\n'))
-        
-        return '\n'.join(lines)
-        
-    def format_problems_text(self, problems):
-        """Format problems for text display"""
-        if not problems:
-            return "No issues found."
-            
-        lines = []
-        for severity in ['high', 'medium', 'low']:
-            severity_problems = [p for p in problems if p['severity'] == severity]
-            if severity_problems:
-                lines.extend([
-                    f"\n{severity.upper()} Severity Issues:",
-                    *[f"  - {p['description']}" for p in severity_problems]
-                ])
-        return '\n'.join(lines)
-
-    def analyze_queries(self):
-        """Run and analyze both queries"""
-        # Analyze original query
-        original_metrics = self.analyze_query(self.original_query)
-        
-        # Analyze optimized query
-        optimized_metrics = self.analyze_query(self.optimized_query)
-        
-        return {
-            'original': original_metrics,
-            'optimized': optimized_metrics
-        }
-        
-    def generate_text_report(self, metrics_data=None):
-        """Generate a comprehensive text report comparing the queries"""
-        if metrics_data is None:
-            metrics_data = self.analyze_queries()
-            
-        # Get all analysis data
-        query_metrics = self.analyze_query_metrics(metrics_data['original'], metrics_data['optimized'])
         original_problems = self.analyze_node_problems(metrics_data['original']['raw_plan'])
         optimized_problems = self.analyze_node_problems(metrics_data['optimized']['raw_plan'])
-        plan_differences = self.analyze_plan_differences(metrics_data['original']['raw_plan'], metrics_data['optimized']['raw_plan'])
-        original_index_recommendations = self.analyze_index_recommendations(metrics_data['original']['raw_plan'])
-        optimized_index_recommendations = self.analyze_index_recommendations(metrics_data['optimized']['raw_plan'])
-        
-        # Get node timing analysis
-        original_timings = self._analyze_node_timings(metrics_data['original']['raw_plan'])
-        optimized_timings = self._analyze_node_timings(metrics_data['optimized']['raw_plan'])
-        
-        # Get statistical analysis
-        original_node_stats = self._analyze_node_type_stats(original_timings)
-        optimized_node_stats = self._analyze_node_type_stats(optimized_timings)
-        original_table_stats = self._analyze_table_stats(original_timings)
-        optimized_table_stats = self._analyze_table_stats(optimized_timings)
-
-        lines = []
-        
-        # Header
-        lines.extend([
-            "PostgreSQL Query Performance Analysis Report",
-            "========================================",
-            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "",
-            "Executive Summary",
-            "-----------------",
-            self._generate_executive_summary(query_metrics, plan_differences),
-            ""
-        ])
-        
-        # Performance Metrics
-        lines.append("\nPerformance Metrics")
-        lines.append("==================")
-        
-        for section in query_metrics.values():
-            lines.extend(self.format_metrics_section(section['name'], section['metrics']))
-        
-        # Statistical Analysis
-        lines.extend([
-            "\nOriginal Query Statistics",
-            "=======================",
-            "\nPer Node Type Statistics:",
-            self.format_node_type_stats(original_node_stats),
-            "\nPer Table Statistics:",
-            self.format_table_stats(original_table_stats),
-            "\nOptimized Query Statistics",
-            "========================",
-            "\nPer Node Type Statistics:",
-            self.format_node_type_stats(optimized_node_stats),
-            "\nPer Table Statistics:",
-            self.format_table_stats(optimized_table_stats)
-        ])
-        
-        # Node Timing Analysis
-        lines.extend([
-            "\nDetailed Node-Level Analysis",
-            "==========================",
-            "\nOriginal Query Node Timings:",
-            "--------------------------",
-            self.format_node_timings(original_timings),
-            "\nOptimized Query Node Timings:",
-            "---------------------------",
-            self.format_node_timings(optimized_timings)
-        ])
-        
-        # Plan Analysis
-        lines.extend([
-            "\nQuery Plan Analysis",
-            "==================",
-            "\nPlan Changes and Optimizations:",
-        ])
-        
-        improvements = [d for d in plan_differences if d['type'] == 'improvement']
-        warnings = [d for d in plan_differences if d['type'] == 'warning']
-        changes = [d for d in plan_differences if d['type'] == 'info']
-        
-        if improvements:
-            lines.extend([
-                "\nImprovements:",
-                *[f"  - {d['description']}" for d in improvements]
-            ])
-        if warnings:
-            lines.extend([
-                "\nConcerns:",
-                *[f"  - {d['description']}" for d in warnings]
-            ])
-        if changes:
-            lines.extend([
-                "\nOther Changes:",
-                *[f"  - {d['description']}" for d in changes]
-            ])
-        
-        # Original Query Analysis
-        lines.extend([
-            "\nOriginal Query Analysis",
-            "=====================",
-            "\nExecution Plan:",
-            self.format_plan_text(metrics_data['original']['raw_plan']),
-            "\nIdentified Issues:",
-            self.format_problems_text(original_problems)
-        ])
-        
-        if original_index_recommendations:
-            lines.extend([
-                "\nIndex Recommendations:",
-                self.format_index_recommendations(original_index_recommendations)
-            ])
-        
-        # Optimized Query Analysis
-        lines.extend([
-            "\nOptimized Query Analysis",
-            "======================",
-            "\nExecution Plan:",
-            self.format_plan_text(metrics_data['optimized']['raw_plan']),
-            "\nIdentified Issues:",
-            self.format_problems_text(optimized_problems)
-        ])
-        
-        if optimized_index_recommendations:
-            lines.extend([
-                "\nIndex Recommendations:",
-                self.format_index_recommendations(optimized_index_recommendations)
-            ])
-        
-        return '\n'.join(lines)
-
-    def _convert_to_ms(self, time_str):
-        """Convert time string to milliseconds"""
-        parts = time_str.split()
-        value = float(''.join(c for c in parts[0] if c.isdigit() or c == '.'))
-        unit = parts[0].strip('0123456789.')
-        if not unit:
-            unit = parts[1] if len(parts) > 1 else 'ms'
-        
-        # Convert to milliseconds
-        if unit == 's':
-            return value * 1000
-        elif unit == 'μs':
-            return value / 1000
-        return value
-
-    def _generate_executive_summary(self, metrics, differences):
-        """Generate an executive summary of the analysis"""
-        try:
-            # Convert times to milliseconds for comparison
-            orig_time = self._convert_to_ms(metrics['timing']['metrics'][2]['original'])
-            opt_time = self._convert_to_ms(metrics['timing']['metrics'][2]['optimized'])
-            
-            time_change = ((orig_time - opt_time) / orig_time) * 100
-            
-            improvements = [d for d in differences if d['type'] == 'improvement']
-            warnings = [d for d in differences if d['type'] == 'warning']
-            
-            summary = []
-            
-            # Overall assessment with more context
-            if opt_time < orig_time:
-                summary.append(f"✅ Performance Improvement")
-                summary.append(f"Total time reduced by {time_change:.1f}% ({metrics['timing']['metrics'][2]['original']} → {metrics['timing']['metrics'][2]['optimized']})")
-                if time_change > 90:
-                    summary.append("🚀 This is a significant optimization!")
-            else:
-                summary.append(f"⚠️ Performance Regression")
-                summary.append(f"Total time increased by {abs(time_change):.1f}% ({metrics['timing']['metrics'][2]['original']} → {metrics['timing']['metrics'][2]['optimized']})")
-                summary.append("❗ The optimized version is taking longer to execute")
-            
-            # Execution time breakdown
-            summary.append("\nTime Breakdown:")
-            summary.append(f"• Planning:  {metrics['timing']['metrics'][0]['original']} → {metrics['timing']['metrics'][0]['optimized']}")
-            summary.append(f"• Execution: {metrics['timing']['metrics'][1]['original']} → {metrics['timing']['metrics'][1]['optimized']}")
-            
-            # Key improvements
-            if improvements:
-                summary.append("\nKey Improvements:")
-                summary.extend([f"• {d['description']}" for d in improvements[:3]])
-                
-            # Key concerns
-            if warnings:
-                summary.append("\nKey Concerns:")
-                summary.extend([f"• {d['description']}" for d in warnings[:3]])
-                
-            # Buffer efficiency
-            shared_hit_ratio = float(metrics['buffers']['metrics'][0]['optimized'].rstrip('%'))
-            if shared_hit_ratio > 90:
-                summary.append(f"\n✅ Buffer Efficiency: Excellent ({shared_hit_ratio:.1f}% hit ratio)")
-            elif shared_hit_ratio > 70:
-                summary.append(f"\n📊 Buffer Efficiency: Good ({shared_hit_ratio:.1f}% hit ratio)")
-            else:
-                summary.append(f"\n⚠️ Buffer Efficiency: Poor ({shared_hit_ratio:.1f}% hit ratio)")
-            
-            return '\n'.join(summary)
-        except Exception as e:
-            return f"Error generating summary: {str(e)}\nPlease check the detailed metrics below."
-
-    def _generate_executive_summary_html(self, metrics_data, differences):
-        """Generate HTML executive summary"""
-        # Get total time difference
-        total_time_diff = next(
-            (d for d in differences if d['type'] == 'total_time'),
-            None
-        )
-        
-        # Get row count difference
-        row_diff = next(
-            (d for d in differences if d['type'] == 'rows'),
-            None
-        )
-        
-        # Generate summary text
-        summary_text = []
-        
-        if total_time_diff:
-            change = float(total_time_diff['change'].rstrip('%'))
-            if change < 0:
-                summary_text.append(
-                    f"<div class='improvement'><h3>Performance Improvement</h3>"
-                    f"<p>The optimized query is {abs(change):.1f}% faster than the original query.</p></div>"
-                )
-            else:
-                summary_text.append(
-                    f"<div class='warning'><h3>Performance Regression</h3>"
-                    f"<p>The optimized query is {change:.1f}% slower than the original query.</p></div>"
-                )
-        
-        if row_diff:
-            orig_rows = row_diff['original']
-            opt_rows = row_diff['optimized']
-            change = float(row_diff['change'].rstrip('%'))
-            
-            if orig_rows != opt_rows:
-                summary_text.append(
-                    f"<div class='warning'><h3>Row Count Difference</h3>"
-                    f"<p>The optimized query returns {opt_rows} rows, while the original returns {orig_rows} rows "
-                    f"({row_diff['change']} difference). This may indicate a semantic change in the query.</p></div>"
-                )
-        
-        # Add query text
-        summary_text.extend([
-            "<h3>Original Query</h3>",
-            f"<pre><code>{self.original_query}</code></pre>",
-            "<h3>Optimized Query</h3>",
-            f"<pre><code>{self.optimized_query}</code></pre>"
-        ])
-        
-        return '\n'.join(summary_text)
-        
-    def _format_change(self, original, optimized):
-        """Format the change between original and optimized values as a percentage"""
-        if original == 0:
-            if optimized == 0:
-                return "0%"
-            return "+∞%"
-        change = ((optimized - original) / original) * 100
-        if change > 0:
-            return f"+{change:.1f}%"
-        return f"{change:.1f}%"
-
-    def generate_html_report(self, metrics_data=None):
-        """Generate HTML report"""
-        if metrics_data is None:
-            metrics_data = self.analyze_queries()
-            
-        # Get problems and recommendations
-        original_problems = self.analyze_plan_problems(metrics_data['original']['raw_plan'])
-        optimized_problems = self.analyze_plan_problems(metrics_data['optimized']['raw_plan'])
-        index_recommendations = self.get_index_recommendations(
-            metrics_data['original']['raw_plan'],
-            metrics_data['optimized']['raw_plan']
-        )
+        original_recommendations = self.analyze_index_recommendations(metrics_data['original']['raw_plan'])
+        optimized_recommendations = self.analyze_index_recommendations(metrics_data['optimized']['raw_plan'])
+        index_recommendations = original_recommendations + optimized_recommendations
         
         # Calculate differences
         differences = []
@@ -1652,440 +1092,166 @@ class QueryAnalyzer:
         
         return '\n'.join(html)
 
-    def _format_plan_html(self, plan):
-        """Format execution plan as HTML table"""
-        html = [
-            "<table class='plan-table'>",
-            "<tr>",
-            "<th>Operation</th>",
-            "<th>Est. Cost</th>",
-            "<th>Est. Rows</th>",
-            "<th>Act. Rows</th>",
-            "<th>Loops</th>",
-            "<th>Time/Loop</th>",
-            "<th>Total Time</th>",
-            "<th>Buffers</th>",
-            "</tr>"
-        ]
+    def _collect_plan_stats(self, plan):
+        """Collect statistics from a query execution plan.
         
-        def format_node(node, depth=0):
-            if isinstance(node, list):
-                node = node[0]
-            if 'Plan' in node:
-                node = node['Plan']
+        Args:
+            plan (dict): The query execution plan
+            
+        Returns:
+            dict: Statistics about the plan, including node types and their metrics
+        """
+        stats = {'node_types': {}}
+        
+        def process_node(node):
+            if not node or not isinstance(node, dict):
+                return
                 
-            indent = "&nbsp;" * (depth * 2)
             node_type = node.get('Node Type', '')
-            relation = node.get('Relation Name', '')
-            index = node.get('Index Name', '')
-            
-            operation = f"{indent}{node_type}"
-            if relation:
-                operation += f" on {relation}"
-            if index:
-                operation += f" using {index}"
+            if node_type:
+                if node_type not in stats:
+                    stats[node_type] = {
+                        'count': 0,
+                        'total_cost': 0,
+                        'total_rows': 0
+                    }
                 
-            startup_time = float(node.get('Actual Startup Time', 0))
-            total_time = float(node.get('Actual Total Time', 0))
-            loops = int(node.get('Actual Loops', 1))
-            time_per_loop = total_time / loops if loops > 0 else 0
+                stats[node_type]['count'] += 1
+                stats[node_type]['total_cost'] += float(node.get('Total Cost', 0))
+                stats[node_type]['total_rows'] += int(node.get('Plan Rows', 0))
             
-            shared_hit = int(node.get('Shared Hit Blocks', 0))
-            shared_read = int(node.get('Shared Read Blocks', 0))
-            shared_written = int(node.get('Shared Written Blocks', 0))
-            temp_read = int(node.get('Temp Read Blocks', 0))
-            temp_written = int(node.get('Temp Written Blocks', 0))
-            
-            buffer_info = f"H:{shared_hit} R:{shared_read}"
-            if shared_written > 0:
-                buffer_info += f" W:{shared_written}"
-            if temp_read > 0 or temp_written > 0:
-                buffer_info += f" T:{temp_read}/{temp_written}"
-                
-            html.append(
-                f"<tr>"
-                f"<td>{operation}</td>"
-                f"<td>{float(node.get('Total Cost', 0)):.2f}</td>"
-                f"<td>{int(node.get('Plan Rows', 0)):,}</td>"
-                f"<td>{int(node.get('Actual Rows', 0)):,}</td>"
-                f"<td>{loops:,}</td>"
-                f"<td>{time_per_loop:.2f}</td>"
-                f"<td>{total_time:.2f}</td>"
-                f"<td>{buffer_info}</td>"
-                f"</tr>"
-            )
-            
-            if node.get('Filter'):
-                html.append(f"<tr><td colspan='8'>{indent}&nbsp;&nbsp;Filter: {node['Filter']}</td></tr>")
-            if node.get('Index Cond'):
-                html.append(f"<tr><td colspan='8'>{indent}&nbsp;&nbsp;Index Cond: {node['Index Cond']}</td></tr>")
-            if node.get('Hash Cond'):
-                html.append(f"<tr><td colspan='8'>{indent}&nbsp;&nbsp;Hash Cond: {node['Hash Cond']}</td></tr>")
-                
+            # Process child nodes recursively
             if 'Plans' in node:
                 for child in node['Plans']:
-                    format_node(child, depth + 1)
-                    
-        format_node(plan)
-        html.append("</table>")
-        return '\n'.join(html)
+                    process_node(child)
         
-    def _format_problems_section_html(self, original_problems, optimized_problems, index_recommendations):
-        """Format problems section as HTML"""
-        html = []
+        # Start with the root plan node
+        if isinstance(plan, dict):
+            root = plan.get('Plan')
+            if root and isinstance(root, dict):
+                process_node(root)
         
-        # Original Query Issues
-        html.append("<h3>Original Query Issues</h3>")
-        if not original_problems:
-            html.append("<p>No issues found.</p>")
-        else:
-            # High Severity Issues
-            high_severity = [p for p in original_problems if p['severity'] == 'HIGH']
-            if high_severity:
-                html.append("<h4>HIGH Severity Issues</h4>")
-                html.append("<ul>")
-                for problem in high_severity:
-                    html.append(f"<li>⚠️ {problem['description']}</li>")
-                html.append("</ul>")
-            
-            # Medium Severity Issues
-            medium_severity = [p for p in original_problems if p['severity'] == 'MEDIUM']
-            if medium_severity:
-                html.append("<h4>MEDIUM Severity Issues</h4>")
-                html.append("<ul>")
-                for problem in medium_severity:
-                    html.append(f"<li>⚠️ {problem['description']}</li>")
-                html.append("</ul>")
-        
-        # Optimized Query Issues
-        html.append("<h3>Optimized Query Issues</h3>")
-        if not optimized_problems:
-            html.append("<p>No issues found.</p>")
-        else:
-            # High Severity Issues
-            high_severity = [p for p in optimized_problems if p['severity'] == 'HIGH']
-            if high_severity:
-                html.append("<h4>HIGH Severity Issues</h4>")
-                html.append("<ul>")
-                for problem in high_severity:
-                    html.append(f"<li>⚠️ {problem['description']}</li>")
-                html.append("</ul>")
-            
-            # Medium Severity Issues
-            medium_severity = [p for p in optimized_problems if p['severity'] == 'MEDIUM']
-            if medium_severity:
-                html.append("<h4>MEDIUM Severity Issues</h4>")
-                html.append("<ul>")
-                for problem in medium_severity:
-                    html.append(f"<li>⚠️ {problem['description']}</li>")
-                html.append("</ul>")
-        
-        # Index Recommendations
-        html.append("<h3>Index Recommendations</h3>")
-        if not index_recommendations:
-            html.append("<p>No index recommendations.</p>")
-        else:
-            html.append("<ul>")
-            for recommendation in index_recommendations:
-                html.append(f"<li>💡 {recommendation['description']}</li>")
-                if 'sql' in recommendation:
-                    html.append(f"<pre><code>{recommendation['sql']}</code></pre>")
-            html.append("</ul>")
-        
-        return '\n'.join(html)
-
-    def get_index_recommendations(self, original_plan, optimized_plan):
-        """Generate index recommendations based on plan analysis"""
-        recommendations = []
-        
-        # Analyze both plans
-        original_problems = self.analyze_plan_problems(original_plan)
-        optimized_problems = self.analyze_plan_problems(optimized_plan)
-        
-        # Helper to extract table and column info from problems
-        def extract_table_info(problems):
-            tables = {}  # Map table name to its row count
-            for problem in problems:
-                if 'Sequential scan on large table' in problem['description']:
-                    desc = problem['description']
-                    table_name = desc.split()[5]  # Extract table name
-                    # Extract row count
-                    row_count = int(''.join(c for c in desc.split('with')[1].split('rows')[0] if c.isdigit()))
-                    tables[table_name] = row_count
-            return tables
-        
-        # Get tables that need indexes
-        original_tables = extract_table_info(original_problems)
-        optimized_tables = extract_table_info(optimized_problems)
-        
-        # Combine tables and use max row count
-        all_tables = {}
-        for table, rows in original_tables.items():
-            all_tables[table] = max(rows, optimized_tables.get(table, 0))
-        for table, rows in optimized_tables.items():
-            if table not in all_tables:
-                all_tables[table] = rows
-        
-        # Generate recommendations for tables that appear in either query
-        for table, row_count in all_tables.items():
-            # Extract filter conditions from the plan
-            filter_cols = self._extract_filter_columns(original_plan, table)
-            filter_cols.update(self._extract_filter_columns(optimized_plan, table))
-            
-            # Generate CREATE INDEX statements
-            if filter_cols:
-                cols_list = ', '.join(sorted(filter_cols))
-                idx_name = f"idx_{table.lower()}_{'_'.join(sorted(filter_cols))}"
-                recommendations.append({
-                    'description': f"Consider adding an index on {table}({cols_list}) to improve query performance",
-                    'sql': f"CREATE INDEX {idx_name} ON {table} ({cols_list});"
-                })
-            
-            # If no specific columns found but table is large, recommend index on commonly used columns
-            elif row_count > 1000:
-                recommendations.append({
-                    'description': f"Consider adding an index on commonly accessed columns of {table} to improve query performance",
-                    'sql': None
-                })
-        
-        return recommendations
-    
-    def _extract_filter_columns(self, plan, target_table):
-        """Extract columns used in filter conditions for a specific table"""
-        columns = set()
-        
-        if not plan:
-            return columns
-        
-        # Extract the actual plan node
-        if isinstance(plan, list):
-            plan = plan[0]
-        if 'Plan' in plan:
-            plan = plan['Plan']
-            
-        # Check if this node is for our target table
-        if plan.get('Relation Name') == target_table:
-            # Extract filter conditions
-            filter_cond = plan.get('Filter', '')
-            if filter_cond:
-                # Simple parsing of filter condition to extract column names
-                # This is a basic implementation and might need to be enhanced
-                parts = filter_cond.split()
-                for part in parts:
-                    if '.' in part:
-                        col = part.split('.')[-1].strip('()"\'')
-                        if col.isidentifier():
-                            columns.add(col)
-        
-        # Recursively check child nodes
-        if 'Plans' in plan:
-            for child in plan['Plans']:
-                columns.update(self._extract_filter_columns({'Plan': child}, target_table))
-        
-        return columns
-
-    def analyze_plan_problems(self, plan):
-        """Analyze plan for potential problems"""
-        problems = []
-        
-        if not plan:
-            return problems
-        
-        # Extract the actual plan node
-        if isinstance(plan, list):
-            plan = plan[0]
-        if 'Plan' in plan:
-            plan = plan['Plan']
-        
-        # Check for sequential scans on large tables
-        if plan['Node Type'] == 'Seq Scan':
-            if plan.get('Plan Rows', 0) > 1000:
-                problems.append({
-                    'severity': 'HIGH',
-                    'description': f"Sequential scan on large table {plan.get('Relation Name', 'unknown')} with {plan.get('Plan Rows', 0):,} rows. Consider adding an index."
-                })
-        
-        # Check for poor row estimates
-        actual_rows = plan.get('Actual Rows', 0)
-        plan_rows = plan.get('Plan Rows', 0)
-        if plan_rows > 0 and actual_rows > 0:
-            estimate_ratio = actual_rows / plan_rows
-            if estimate_ratio > 10 or estimate_ratio < 0.1:
-                problems.append({
-                    'severity': 'MEDIUM',
-                    'description': f"Poor row estimate in {plan['Node Type']}: expected {plan_rows:,} rows but got {actual_rows:,} rows. Consider running ANALYZE."
-                })
-        
-        # Check for expensive sorts
-        if plan['Node Type'] == 'Sort':
-            if plan.get('Sort Method', '') == 'External Merge':
-                problems.append({
-                    'severity': 'HIGH',
-                    'description': f"External merge sort detected. Query is using disk for sorting, which is much slower than in-memory sorts."
-                })
-            elif plan.get('Sort Space Used', 0) > 1000000:  # More than 1MB
-                problems.append({
-                    'severity': 'MEDIUM',
-                    'description': f"Large in-memory sort using {plan.get('Sort Space Used', 0):,} bytes. Consider adding indexes to avoid sorting."
-                })
-        
-        # Check for hash joins with large tables
-        if plan['Node Type'] == 'Hash Join':
-            hash_table_size = plan.get('Hash Table Size', 0)
-            if hash_table_size > 1000000:  # More than 1MB
-                problems.append({
-                    'severity': 'MEDIUM',
-                    'description': f"Large hash table size ({hash_table_size:,} bytes) in Hash Join. Consider using indexes for join conditions."
-                })
-        
-        # Recursively check child nodes
-        if 'Plans' in plan:
-            for child in plan['Plans']:
-                problems.extend(self.analyze_plan_problems({'Plan': child}))
-        
-        return problems
-    
-    def generate_html_report(self, metrics_data=None):
-        """Generate an HTML report"""
-        if metrics_data is None:
-            metrics_data = self.analyze_queries()
-            
-        # Get problems and recommendations
-        original_problems = self.analyze_plan_problems(metrics_data['original']['raw_plan'])
-        optimized_problems = self.analyze_plan_problems(metrics_data['optimized']['raw_plan'])
-        index_recommendations = self.get_index_recommendations(
-            metrics_data['original']['raw_plan'],
-            metrics_data['optimized']['raw_plan']
-        )
-        
-        # Calculate differences
-        differences = []
-        
-        # Compare planning time
-        orig_planning = metrics_data['original'].get('planning_time', 0)
-        opt_planning = metrics_data['optimized'].get('planning_time', 0)
-        if orig_planning != opt_planning:
-            differences.append({
-                'type': 'planning_time',
-                'original': orig_planning,
-                'optimized': opt_planning,
-                'change': self._format_change(orig_planning, opt_planning)
-            })
-        
-        # Compare execution time
-        orig_execution = metrics_data['original'].get('execution_time', 0)
-        opt_execution = metrics_data['optimized'].get('execution_time', 0)
-        if orig_execution != opt_execution:
-            differences.append({
-                'type': 'execution_time',
-                'original': orig_execution,
-                'optimized': opt_execution,
-                'change': self._format_change(orig_execution, opt_execution)
-            })
-        
-        # Compare total time
-        orig_total = orig_planning + orig_execution
-        opt_total = opt_planning + opt_execution
-        if orig_total != opt_total:
-            differences.append({
-                'type': 'total_time',
-                'original': orig_total,
-                'optimized': opt_total,
-                'change': self._format_change(orig_total, opt_total)
-            })
-        
-        # Compare row counts
-        orig_rows = metrics_data['original'].get('row_count', 0)
-        opt_rows = metrics_data['optimized'].get('row_count', 0)
-        if orig_rows != opt_rows:
-            differences.append({
-                'type': 'rows',
-                'original': orig_rows,
-                'optimized': opt_rows,
-                'change': self._format_change(orig_rows, opt_rows)
-            })
-        
-        # Generate sections
-        exec_summary = self._generate_executive_summary_html(metrics_data, differences)
-        perf_metrics = self._format_performance_metrics_html(metrics_data)
-        query_stats = self._format_query_stats_html(metrics_data)
-        plan_analysis = self._format_plan_analysis_html(metrics_data)
-        problems = self._format_problems_section_html(original_problems, optimized_problems, index_recommendations)
-        
-        # Combine all sections
-        html = [
-            "<!DOCTYPE html>",
-            "<html>",
-            "<head>",
-            "<meta charset='utf-8'>",
-            "<title>PostgreSQL Query Performance Analysis Report</title>",
-            "<style>",
-            "body { font-family: monospace; line-height: 1.4; margin: 20px; }",
-            "h1, h2, h3, h4 { color: #333; margin: 1em 0 0.5em 0; }",
-            "h1 { border-bottom: 2px solid #333; padding-bottom: 0.2em; }",
-            "h2 { border-bottom: 1px solid #666; }",
-            "table { border-collapse: collapse; width: 100%; margin: 1em 0; }",
-            "th, td { text-align: left; padding: 0.3em 1em; font-family: monospace; }",
-            "th { border-bottom: 1px solid #666; }",
-            ".metric-table td:first-child { width: 200px; }",
-            ".metric-table td:nth-child(2), .metric-table td:nth-child(3) { text-align: right; width: 100px; }",
-            ".metric-table td:nth-child(4) { text-align: left; padding-left: 2em; }",
-            ".improvement { color: #28a745; }",
-            ".warning { color: #dc3545; }",
-            "div.improvement, div.warning { padding: 0.5em; margin: 0.5em 0; }",
-            "div.improvement h3, div.warning h3 { color: inherit; margin: 0; }",
-            "ul { list-style-type: none; padding-left: 0; margin: 0.5em 0; }",
-            "li { margin: 0.2em 0; }",
-            ".plan-table { font-family: monospace; }",
-            ".plan-table td:first-child { white-space: pre; }",
-            "pre { background-color: #f8f9fa; padding: 1em; border-radius: 4px; overflow-x: auto; }",
-            "code { font-family: monospace; }",
-            "</style>",
-            "</head>",
-            "<body>",
-            "<h1>PostgreSQL Query Performance Analysis Report</h1>",
-            f"<p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
-            "<h2>Executive Summary</h2>",
-            exec_summary,
-            "<h2>Performance Metrics</h2>",
-            perf_metrics,
-            "<h2>Query Statistics</h2>",
-            query_stats,
-            "<h2>Execution Plan Analysis</h2>",
-            plan_analysis,
-            "<h2>Problems and Recommendations</h2>",
-            problems,
-            "</body>",
-            "</html>"
-        ]
-        
-        return '\n'.join(html)
-
-    def _format_change(self, original, optimized):
-        """Format the change between original and optimized values as a percentage"""
-        if original == 0:
-            if optimized == 0:
-                return "0%"
-            return "+∞%"
-        change = ((optimized - original) / original) * 100
-        if change > 0:
-            return f"+{change:.1f}%"
-        return f"{change:.1f}%"
+        return stats
 
     def _format_query_stats_html(self, metrics_data):
         """Format query statistics section of HTML report"""
+        def format_plan_stats(plan):
+            if not plan:
+                return "<p>No plan data available</p>"
+            
+            # Collect node type stats
+            node_types = {}
+            self._collect_node_types(plan, node_types)
+            
+            # Format node type table
+            html = ["<h4>Node Types</h4>"]
+            html.append("<table class='metric-table'>")
+            html.append("<tr><th>Node Type</th><th>Count</th><th>Total Cost</th><th>Avg. Rows</th></tr>")
+            
+            for node_type, stats in sorted(node_types.items()):
+                avg_rows = stats['total_rows'] / stats['count'] if stats['count'] > 0 else 0
+                html.append(
+                    f"<tr>"
+                    f"<td>{node_type}</td>"
+                    f"<td>{stats['count']}</td>"
+                    f"<td>{stats['total_cost']:.1f}</td>"
+                    f"<td>{avg_rows:.1f}</td>"
+                    f"</tr>"
+                )
+            
+            html.append("</table>")
+            
+            # Collect table stats
+            table_stats = {}
+            self._collect_table_stats(plan, table_stats)
+            
+            # Format table stats
+            if table_stats:
+                html.append("<h4>Table Statistics</h4>")
+                html.append("<table class='metric-table'>")
+                html.append("<tr><th>Table</th><th>Scan Type</th><th>Rows</th><th>Width</th><th>Cost</th></tr>")
+                
+                for table, stats in sorted(table_stats.items()):
+                    html.append(
+                        f"<tr>"
+                        f"<td>{table}</td>"
+                        f"<td>{stats['scan_type']}</td>"
+                        f"<td>{stats['rows']}</td>"
+                        f"<td>{stats['width']}</td>"
+                        f"<td>{stats['cost']:.1f}</td>"
+                        f"</tr>"
+                    )
+                
+                html.append("</table>")
+            
+            return '\n'.join(html)
+        
         html = []
         
-        # Format original query stats
+        # Original Query Stats
         html.append("<h3>Original Query</h3>")
-        html.append(self._format_plan_stats(metrics_data['original']['raw_plan']))
+        if 'raw_plan' in metrics_data['original']:
+            html.append(format_plan_stats(metrics_data['original']['raw_plan']))
+        else:
+            html.append("<p>No plan data available</p>")
         
-        # Format optimized query stats
+        # Optimized Query Stats
         html.append("<h3>Optimized Query</h3>")
-        html.append(self._format_plan_stats(metrics_data['optimized']['raw_plan']))
+        if 'raw_plan' in metrics_data['optimized']:
+            html.append(format_plan_stats(metrics_data['optimized']['raw_plan']))
+        else:
+            html.append("<p>No plan data available</p>")
         
         return '\n'.join(html)
-
+    
+    def _collect_node_types(self, node, stats):
+        """Recursively collect statistics about node types in the plan"""
+        if isinstance(node, list):
+            node = node[0]
+        if 'Plan' in node:
+            node = node['Plan']
+            
+        node_type = node.get('Node Type', '')
+        if node_type:
+            if node_type not in stats:
+                stats[node_type] = {
+                    'count': 0,
+                    'total_cost': 0,
+                    'total_rows': 0
+                }
+            
+            stats[node_type]['count'] += 1
+            stats[node_type]['total_cost'] += float(node.get('Total Cost', 0))
+            stats[node_type]['total_rows'] += int(node.get('Plan Rows', 0))
+        
+        # Process child nodes recursively
+        if 'Plans' in node:
+            for child in node['Plans']:
+                self._collect_node_types(child, stats)
+    
+    def _collect_table_stats(self, node, stats):
+        """Recursively collect statistics about tables in the plan"""
+        if isinstance(node, list):
+            node = node[0]
+        if 'Plan' in node:
+            node = node['Plan']
+            
+        # Check if this is a scan node
+        node_type = node.get('Node Type', '')
+        if 'Scan' in node_type:
+            relation = node.get('Relation Name')
+            stats[relation] = {
+                'scan_type': node_type,
+                'rows': node.get('Plan Rows', 0),
+                'width': node.get('Plan Width', 0),
+                'cost': float(node.get('Total Cost', 0))
+            }
+        
+        # Recursively check child nodes
+        if 'Plans' in node:
+            for child in node['Plans']:
+                self._collect_table_stats(child, stats)
+        
     def _format_plan_stats(self, plan):
         """Format statistics for a single query plan"""
         if not plan:
@@ -2101,12 +1267,12 @@ class QueryAnalyzer:
         html.append("<tr><th>Node Type</th><th>Count</th><th>Total Cost</th><th>Avg. Rows</th></tr>")
         
         for node_type, stats in sorted(node_types.items()):
-            avg_rows = stats['rows'] / stats['count'] if stats['count'] > 0 else 0
+            avg_rows = stats['total_rows'] / stats['count'] if stats['count'] > 0 else 0
             html.append(
                 f"<tr>"
                 f"<td>{node_type}</td>"
                 f"<td>{stats['count']}</td>"
-                f"<td>{stats['cost']:.1f}</td>"
+                f"<td>{stats['total_cost']:.1f}</td>"
                 f"<td>{avg_rows:.1f}</td>"
                 f"</tr>"
             )
@@ -2138,48 +1304,6 @@ class QueryAnalyzer:
         
         return '\n'.join(html)
     
-    def _collect_node_types(self, node, stats):
-        """Recursively collect statistics about node types in the plan"""
-        if not node:
-            return
-        
-        node_type = node.get('Node Type', '')
-        if node_type not in stats:
-            stats[node_type] = {
-                'count': 0,
-                'cost': 0,
-                'rows': 0
-            }
-        stats[node_type]['count'] += 1
-        stats[node_type]['cost'] += float(node.get('Total Cost', 0))
-        stats[node_type]['rows'] += int(node.get('Plan Rows', 0))
-        
-        # Recurse into child plans
-        if 'Plans' in node:
-            for child in node['Plans']:
-                self._collect_node_types(child, stats)
-    
-    def _collect_table_stats(self, node, stats):
-        """Recursively collect statistics about tables in the plan"""
-        if not node:
-            return
-        
-        # Check if this is a scan node
-        node_type = node.get('Node Type', '')
-        if 'Scan' in node_type:
-            table_name = node.get('Relation Name')
-            stats[table_name] = {
-                'scan_type': node_type,
-                'rows': node.get('Plan Rows', 0),
-                'width': node.get('Plan Width', 0),
-                'cost': float(node.get('Total Cost', 0))
-            }
-        
-        # Recursively check child nodes
-        if 'Plans' in node:
-            for child in node['Plans']:
-                self._collect_table_stats(child, stats)
-        
     def _format_plan_analysis_html(self, metrics_data):
         """Format plan analysis section of HTML report"""
         html = []
@@ -2400,10 +1524,9 @@ class QueryAnalyzer:
                         columns = []
                         for key in sort_key:
                             if '.' in key:
-                                col = key.split('.')[-1]
-                            else:
-                                col = key
-                            columns.append(col)
+                                col = key.split('.')[-1].strip('()"\'')
+                                if col.isidentifier():
+                                    columns.append(col)
                         if columns:
                             recommendations.append({
                                 'type': 'index',
@@ -2426,97 +1549,74 @@ class QueryAnalyzer:
         
     def _find_parent_relation(self, node):
         """Try to find the relation name from parent nodes"""
-        if isinstance(node, list):
-            node = node[0]
-        if 'Plan' in node:
-            node = node['Plan']
-            
+        # This is a simplified implementation
+        # In a real scenario, we would need to traverse the plan tree
+        
+        # First check if the current node has a relation name
         if 'Relation Name' in node:
             return node['Relation Name']
-            
+        
+        # Check in child plans
         if 'Plans' in node:
             for child in node['Plans']:
-                result = self._find_parent_relation(child)
-                if result:
-                    return result
+                if 'Relation Name' in child:
+                    return child['Relation Name']
+        
         return None
 
     def _extract_columns_from_condition(self, condition):
         """Extract column names from a filter condition"""
-        if not condition:
-            return []
-            
+        # This is a simplified implementation
+        # In a real scenario, we would need a proper SQL parser
         columns = []
-        try:
-            # Look for common patterns in conditions
-            parts = condition.replace('(', ' ').replace(')', ' ').split(' AND ')
-            for part in parts:
-                part = part.strip()
-                # Skip if empty
-                if not part:
-                    continue
-                    
-                # Extract column name from various condition types
-                if any(op in part.upper() for op in [' = ', ' LIKE ', ' > ', ' < ', ' >= ', ' <= ', ' IN ']):
-                    words = part.split()
-                    if words:
-                        col = words[0].strip()
-                        if '.' in col:
-                            # Handle schema.table.column format
-                            col = col.split('.')[-1]  # Take the last part as column name
-                        columns.append(col)
-                        
-                # Handle special functions like POSITION, COALESCE
-                elif 'POSITION(' in part.upper():
-                    # Extract column from POSITION(col IN ...)
-                    try:
-                        col_part = part[part.upper().index('POSITION(') + 9:]
-                        col = col_part[:col_part.upper().index(' IN ')].strip()
-                        if '.' in col:
-                            col = col.split('.')[-1]
-                        columns.append(col)
-                    except (ValueError, IndexError):
-                        pass
-                        
-                # Handle COALESCE
-                elif 'COALESCE(' in part.upper():
-                    try:
-                        col_part = part[part.upper().index('COALESCE(') + 9:]
-                        col = col_part.split(',')[0].strip()
-                        if '.' in col:
-                            col = col.split('.')[-1]
-                        columns.append(col)
-                    except (ValueError, IndexError):
-                        pass
+        
+        # Split on common operators
+        parts = re.split(r'\s+AND\s+|\s+OR\s+|\s*[=<>!]+\s*', condition)
+        
+        for part in parts:
+            # Remove any parentheses and quotes
+            part = part.strip('()"\'')
             
-        except Exception as e:
-            print(f"Warning: Could not parse condition: {condition}")
-            return []
-            
+            # If it contains a dot, it's likely a column reference
+            if '.' in part:
+                col = part.split('.')[-1]
+                if col.isidentifier():
+                    columns.append(col)
+            # If it's a valid identifier, it might be a column name
+            elif part.isidentifier():
+                columns.append(part)
+        
         return list(set(columns))  # Remove duplicates
 
     def _extract_join_columns(self, condition):
-        """Extract table and column names from join conditions"""
-        if not condition:
-            return {}
+        """Extract table and column names from a join condition"""
+        # This is a simplified implementation
+        # In a real scenario, we would need a proper SQL parser
+        tables_cols = {}
+        
+        # Split on common operators
+        parts = re.split(r'\s*[=<>!]+\s*', condition)
+        
+        for part in parts:
+            # Remove any parentheses and quotes
+            part = part.strip('()"\'')
             
-        tables_columns = {}
-        try:
-            parts = condition.replace('(', '').replace(')', '').split(' = ')
-            for part in parts:
-                if '.' in part:
-                    try:
-                        table, col = part.strip().split('.')[-2:]  # Handle cases with schema.table.column
-                        if table not in tables_columns:
-                            tables_columns[table] = []
-                        tables_columns[table].append(col)
-                    except ValueError:
-                        continue  # Skip if we can't parse this part
-        except Exception as e:
-            print(f"Warning: Could not parse join condition: {condition}")
-            return {}
-            
-        return tables_columns
+            # If it contains a dot, it's likely a schema.table.column or table.column reference
+            if '.' in part:
+                segments = part.split('.')
+                if len(segments) == 2:
+                    table, col = segments
+                elif len(segments) == 3:
+                    schema, table, col = segments
+                else:
+                    continue
+                
+                if col.isidentifier():
+                    if table not in tables_cols:
+                        tables_cols[table] = []
+                    tables_cols[table].append(col)
+        
+        return tables_cols
         
     def format_index_recommendations(self, recommendations):
         """Format index recommendations for text display"""
@@ -2805,3 +1905,167 @@ class QueryAnalyzer:
             lines.append("")  # Empty line between nodes
         
         return "\n".join(lines)
+
+    def get_index_recommendations(self, original_plan, optimized_plan):
+        """Analyze execution plans and provide index recommendations"""
+        recommendations = []
+        
+        def analyze_node(node):
+            if isinstance(node, list):
+                node = node[0]
+            if 'Plan' in node:
+                node = node['Plan']
+                
+            node_type = node.get('Node Type', '')
+            
+            # Check for sequential scans
+            if node_type == 'Seq Scan':
+                relation = node.get('Relation Name')
+                filter_cond = node.get('Filter', '')
+                if relation and filter_cond:
+                    columns = self._extract_columns_from_condition(filter_cond)
+                    if columns:
+                        recommendations.append({
+                            'type': 'index',
+                            'table': relation,
+                            'columns': columns,
+                            'reason': f"Sequential scan with filter: {filter_cond}"
+                        })
+            
+            # Check for inefficient joins
+            elif node_type in ['Hash Join', 'Nested Loop', 'Merge Join']:
+                # Check hash conditions
+                hash_cond = node.get('Hash Cond', '')
+                if hash_cond:
+                    tables_cols = self._extract_join_columns(hash_cond)
+                    for table, cols in tables_cols.items():
+                        recommendations.append({
+                            'type': 'index',
+                            'table': table,
+                            'columns': cols,
+                            'reason': f"Join condition: {hash_cond}"
+                        })
+                
+                # Check merge conditions
+                merge_cond = node.get('Merge Cond', '')
+                if merge_cond:
+                    tables_cols = self._extract_join_columns(merge_cond)
+                    for table, cols in tables_cols.items():
+                        recommendations.append({
+                            'type': 'index',
+                            'table': table,
+                            'columns': cols,
+                            'reason': f"Merge condition: {merge_cond}"
+                        })
+                
+                # Check join filters
+                join_filter = node.get('Join Filter', '')
+                if join_filter:
+                    tables_cols = self._extract_join_columns(join_filter)
+                    for table, cols in tables_cols.items():
+                        recommendations.append({
+                            'type': 'index',
+                            'table': table,
+                            'columns': cols,
+                            'reason': f"Join filter: {join_filter}"
+                        })
+            
+            # Check for sorting operations
+            elif node_type == 'Sort':
+                sort_key = node.get('Sort Key', [])
+                if sort_key:
+                    # Try to determine the table from parent nodes
+                    table = self._find_parent_relation(node)
+                    if table:
+                        columns = []
+                        for key in sort_key:
+                            if '.' in key:
+                                col = key.split('.')[-1].strip('()"\'')
+                                if col.isidentifier():
+                                    columns.append(col)
+                        if columns:
+                            recommendations.append({
+                                'type': 'index',
+                                'table': table,
+                                'columns': columns,
+                                'reason': f"Sort operation on columns: {', '.join(sort_key)}"
+                            })
+            
+            # Recursively check child nodes
+            if 'Plans' in node:
+                for child in node['Plans']:
+                    analyze_node(child)
+                    
+        try:
+            analyze_node(original_plan)
+            analyze_node(optimized_plan)
+        except Exception as e:
+            print(f"Warning: Error analyzing plan for index recommendations: {str(e)}")
+        
+        return recommendations
+
+    def _format_problems_section_html(self, original_problems, optimized_problems, index_recommendations):
+        """Format problems section as HTML"""
+        html = []
+        
+        # Original Query Issues
+        html.append("<h3>Original Query Issues</h3>")
+        if not original_problems:
+            html.append("<p>No issues found.</p>")
+        else:
+            # High Severity Issues
+            high_severity = [p for p in original_problems if p['severity'] == 'HIGH']
+            if high_severity:
+                html.append("<h4>HIGH Severity Issues</h4>")
+                html.append("<ul>")
+                for problem in high_severity:
+                    html.append(f"<li>⚠️ {problem['description']}</li>")
+                html.append("</ul>")
+            
+            # Medium Severity Issues
+            medium_severity = [p for p in original_problems if p['severity'] == 'MEDIUM']
+            if medium_severity:
+                html.append("<h4>MEDIUM Severity Issues</h4>")
+                html.append("<ul>")
+                for problem in medium_severity:
+                    html.append(f"<li>⚠️ {problem['description']}</li>")
+                html.append("</ul>")
+        
+        # Optimized Query Issues
+        html.append("<h3>Optimized Query Issues</h3>")
+        if not optimized_problems:
+            html.append("<p>No issues found.</p>")
+        else:
+            # High Severity Issues
+            high_severity = [p for p in optimized_problems if p['severity'] == 'HIGH']
+            if high_severity:
+                html.append("<h4>HIGH Severity Issues</h4>")
+                html.append("<ul>")
+                for problem in high_severity:
+                    html.append(f"<li>⚠️ {problem['description']}</li>")
+                html.append("</ul>")
+            
+            # Medium Severity Issues
+            medium_severity = [p for p in optimized_problems if p['severity'] == 'MEDIUM']
+            if medium_severity:
+                html.append("<h4>MEDIUM Severity Issues</h4>")
+                html.append("<ul>")
+                for problem in medium_severity:
+                    html.append(f"<li>⚠️ {problem['description']}</li>")
+                html.append("</ul>")
+        
+        # Index Recommendations
+        html.append("<h3>Index Recommendations</h3>")
+        if not index_recommendations:
+            html.append("<p>No index recommendations.</p>")
+        else:
+            html.append("<ul>")
+            for recommendation in index_recommendations:
+                if recommendation['type'] == 'index':
+                    table = recommendation['table']
+                    columns = ', '.join(recommendation['columns'])
+                    reason = recommendation['reason']
+                    html.append(f"<li>💡 Consider creating an index on {table}({columns})<br>Reason: {reason}</li>")
+            html.append("</ul>")
+        
+        return '\n'.join(html)

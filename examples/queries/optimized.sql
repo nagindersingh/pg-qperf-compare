@@ -1,26 +1,61 @@
--- Example query after optimization
-WITH order_counts AS (
-    SELECT 
-        product_id,
-        COUNT(*) as total_orders
-    FROM 
-        order_items
-    GROUP BY 
-        product_id
-)
-SELECT 
-    p.product_id,
-    p.name,
-    c.category_name,
-    i.quantity_in_stock,
-    COALESCE(o.total_orders, 0) as total_orders
-FROM 
-    products p
-    JOIN inventory i ON p.product_id = i.product_id
-    JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN order_counts o ON p.product_id = o.product_id
-WHERE 
-    p.active = true
-    AND i.quantity_in_stock > 0
+-- Original query for DM parts inventory
+-- This query retrieves inventory information for parts containing 'DM' in their part numbers
+
+SELECT DISTINCT 
+    TITLE.MAKE AS TITLE_MAKE,
+    TITLE.PARTNO AS TITLE_PARTNO,
+    TITLE.INACTIVE AS TITLE_INACTIVE,
+    TITLE.DESCRIPTION AS TITLE_DESCRIPTION,
+    TITLE.NSR AS TITLE_NSR,
+    INVTORY.INVTYPE AS INVTORY_INVTYPE,
+    INVTORY.SELLUOM AS INVTORY_SELLUOM,
+    SUM(INVTORY.ONHANDQTY) AS INVTORY_QTY,
+    COALESCE(sum(INVTORY.SHELFQTY),0) AS SHELFQTY,
+    COALESCE(sum(INVTORY.SECONDARYSHELFQTY),0) AS SECONDARYSHELFQTY,
+    COALESCE(sum(INVTORY.TERTIARYSHELFQTY),0) AS TERTIARYSHELFQTY,
+    COALESCE(sum(INVTORY.FOURTHLYSHELFQTY),0) AS FOURTHLYSHELFQTY,
+    COALESCE(sum((CASE WHEN INVTORY.SECONDARYSHELFDISABLED THEN INVTORY.SECONDARYSHELFQTY ELSE 0 END ) * COALESCE(INVTORY.EAQTY,1)), 0) AS SECONDARYSHELFDISABLEDQTY,
+    COALESCE(sum((CASE WHEN INVTORY.TERTIARYSHELFDISABLED THEN INVTORY.TERTIARYSHELFQTY ELSE 0 END ) * COALESCE(INVTORY.EAQTY,1)), 0) AS TERTIARYSHELFDISABLEDQTY,
+    COALESCE(sum((CASE WHEN INVTORY.FOURTHLYSHELFDISABLED THEN INVTORY.FOURTHLYSHELFQTY ELSE 0 END ) * COALESCE(INVTORY.EAQTY,1)), 0) AS FOURTHLYSHELFDISABLEDQTY,
+    (case when INVTORY.selluom = INVQTY.selluom then INVQTY.ONHANDQTY 
+          else (INVQTY.ONHANDQTY  /  coalesce((select ratio from titleconversion
+                where make = TITLE.MAKE and partno = TITLE.PARTNO and selluom = INVTORY.SELLUOM and invqtyuom = invqty.selluom), 1))
+     end ) as INVQTY_ONHANDQTY,
+    (case when INVTORY.selluom = INVQTY.selluom then INVQTY.COMMITTEDQTY 
+          else (INVQTY.COMMITTEDQTY  /  coalesce((select ratio from titleconversion
+                where make = TITLE.MAKE and partno = TITLE.PARTNO and selluom = INVTORY.SELLUOM and invqtyuom = invqty.selluom), 1))
+     end ) as INVQTY_COMMITTEDQTY,
+    (case when INVTORY.selluom = INVQTY.selluom then INVQTY.BACKORDER 
+          else (INVQTY.BACKORDER  /  coalesce((select ratio from titleconversion
+                where make = TITLE.MAKE and partno = TITLE.PARTNO and selluom = INVTORY.SELLUOM and invqtyuom = invqty.selluom), 1))
+     end ) as INVQTY_BACKORDER,
+    INVQTY.SELLUOM AS INVQTY_SELLUOM,
+    INVTORY.OFFICE AS OFFICE 
+FROM INVTORY,
+     TITLE,
+     INVQTY
+WHERE INVTORY.PARTNO LIKE '%DM%'
+    AND INVTORY.MAKE = TITLE.MAKE
+    AND INVTORY.PARTNO = TITLE.PARTNO
+    AND INVTORY.MAKE = INVQTY.MAKE
+    AND INVTORY.PARTNO = INVQTY.PARTNO
+    AND INVTORY.OFFICE = INVQTY.OFFICE
+    AND POSITION(INVTORY.SELLUOM IN COALESCE(TITLE.HIDEUOM, ''))<=0
+GROUP BY 
+    TITLE.MAKE,
+    TITLE.PARTNO,
+    TITLE.INACTIVE,
+    TITLE.DESCRIPTION,
+    TITLE.NSR,
+    INVTORY.INVTYPE,
+    INVTORY.SELLUOM,
+    INVQTY.ONHANDQTY,
+    INVQTY.COMMITTEDQTY,
+    INVQTY.BACKORDER,
+    INVQTY.SELLUOM,
+    INVTORY.OFFICE
 ORDER BY 
-    o.total_orders DESC NULLS LAST;
+    TITLE_MAKE,
+    TITLE_PARTNO,
+    INVTORY_INVTYPE,
+    INVTORY_QTY;

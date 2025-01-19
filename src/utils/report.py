@@ -635,7 +635,7 @@ class ReportGenerator:
         
         change = ((optimized - original) / original) * 100
         if change > 0:
-            return f"+{change:.1f}% (worse)"  # Increase is worse for time/blocks
+            return f"-{change:.1f}% (worse)"  # Increase is worse for time/blocks
         elif change < 0:
             return f"+{abs(change):.1f}% (better)"  # Show positive number for improvements
         else:
@@ -651,7 +651,7 @@ class ReportGenerator:
         
         change = ((optimized - original) / original) * 100
         if change > 0:
-            return f'<span class="warning">+{change:.1f}%</span>'  # Increase is worse for time/blocks
+            return f'<span class="warning">-{change:.1f}%</span>'  # Increase is worse for time/blocks
         elif change < 0:
             return f'<span class="improvement">+{abs(change):.1f}%</span>'  # Show positive number for improvements
         else:

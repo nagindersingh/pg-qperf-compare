@@ -115,8 +115,7 @@ pg-qperf-compare/
 
 3. View the results:
    - Open the generated HTML report in your browser
-   - Check the JSON data export for detailed metrics
-   - Review the log file for analysis details
+   - Check the TEXT data export for detailed metrics
 
 ## Report Interpretation
 

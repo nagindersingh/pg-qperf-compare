@@ -1,15 +1,15 @@
 # Database connection settings
 database:
-  host: localhost
+  host: dme-prod.cvfear9vkqdr.us-west-2.rds.amazonaws.com
   port: 5432
-  dbname: your_database
-  user: your_username
-  password: your_password  # Consider using environment variables in production
+  dbname: medsouth
+  user: dme
+  password: dme-bonafide  # Consider using environment variables in production
 
 # Query files to compare
 queries:
-  original: ./queries/original.sql
-  optimized: ./queries/optimized.sql
+  original: /Users/nagindersingh/dev/pg-qperf-compare/examples/queries/original.sql
+  optimized: /Users/nagindersingh/dev/pg-qperf-compare/examples/queries/optimized.sql
 
 # Output settings
 output:

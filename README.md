@@ -8,7 +8,34 @@ A powerful tool for analyzing and comparing PostgreSQL query performance, helpin
 - Analyze query metrics including planning time, execution time, and row counts
 - Track I/O statistics and buffer usage
 - Generate beautiful HTML reports with performance visualizations
+- Detailed node type statistics for query execution plans
+- Smart index recommendations based on query patterns
 - Export raw data in JSON format for further analysis
+
+## Performance Analysis
+The tool provides comprehensive analysis of:
+
+### Node Type Statistics
+- Counts and distribution of different node types (e.g., Seq Scan, Index Scan, Hash Join)
+- Cost metrics per node type
+- Average rows processed by each node type
+
+### Table Statistics
+- Scan types used for each table
+- Row counts and widths
+- Cost metrics per table access
+
+### I/O Analysis
+- Shared/local buffer hits and reads
+- Temporary buffer usage
+- Buffer efficiency ratios
+
+### Index Recommendations
+- Smart suggestions for new indexes based on:
+  - Join conditions
+  - Filter predicates
+  - Sort operations
+  - Table access patterns
 
 ## Project Structure
 ```
@@ -91,6 +118,30 @@ pg-qperf-compare/
    - Check the JSON data export for detailed metrics
    - Review the log file for analysis details
 
+## Report Interpretation
+
+The HTML report provides:
+
+1. **Executive Summary**
+   - Overall performance comparison
+   - Key metrics differences
+   - Performance regressions or improvements
+
+2. **Query Statistics**
+   - Node type distribution and costs
+   - Table access patterns
+   - Buffer usage efficiency
+
+3. **Execution Plan Analysis**
+   - Detailed plan comparison
+   - Node-by-node metrics
+   - Cost and row estimates vs actuals
+
+4. **Recommendations**
+   - Index suggestions
+   - Query structure improvements
+   - Configuration adjustments
+
 ## Testing
 
 The project uses pytest for testing. The test suite includes:
@@ -99,68 +150,19 @@ The project uses pytest for testing. The test suite includes:
 - Integration tests for database operations
 - Fixtures for common test scenarios
 
-Run the tests:
+Run tests with:
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage report
-pytest --cov
-
-# Run specific test file
-pytest tests/test_analyzer.py
+pytest tests/
 ```
-
-Coverage reports are generated in HTML format in the `htmlcov` directory.
-
-Key test files:
-- `test_analyzer.py`: Tests for query analysis logic
-- `test_config.py`: Tests for configuration handling
-- `test_metrics.py`: Tests for metrics calculations
-
-## Output Files
-
-The tool generates several files in your specified output directory:
-
-- `report_[timestamp].html`: Main performance comparison report
-- `data_[timestamp].json`: Raw performance data in JSON format
-- `analysis.log`: Detailed analysis log
-
-## Report Contents
-
-The HTML report includes:
-- Performance summary with improvement percentages
-- Side-by-side query comparison
-- Execution plan analysis
-- I/O and buffer statistics
-- Performance visualizations
-
-## Development
-
-Want to contribute? Great! The project follows a modular architecture:
-
-- `core/`: Contains the main analysis logic
-- `utils/`: Houses utility functions and helpers
-- `reports/`: Handles report generation and templating
-
-## Requirements
-
-- Python 3.7+
-- PostgreSQL 10+
-- Required Python packages (see `requirements.txt`)
-
-## License
-
-MIT License - feel free to use this tool for any purpose!
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Run the test suite
+5. Submit a pull request
 
-## Support
+## License
 
-Found a bug or need help? Please open an issue on GitHub.
+This project is licensed under the MIT License - see the LICENSE file for details.

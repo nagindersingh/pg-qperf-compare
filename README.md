@@ -14,6 +14,37 @@ A powerful tool for analyzing and comparing PostgreSQL query performance, helpin
 
 ## Development Setup
 
+### Database Setup
+1. Prerequisites:
+   - PostgreSQL installed and running
+   - `psql` command-line tool available
+
+2. Create test database and user:
+   ```bash
+   # Create test user
+   createuser -s test
+
+   # Create test database
+   createdb test
+   ```
+
+3. Load sample data:
+   ```bash
+   # Load the sample schema and data
+   psql -U test -d test -f examples/setup.sql
+   ```
+
+4. Configure database connection:
+   ```yaml
+   # examples/config.yml
+   database:
+     host: localhost
+     port: 5432
+     dbname: test
+     user: test
+     password: test  # Use environment variables in production
+   ```
+
 ### Git Hooks
 The project uses git hooks to ensure code quality. After cloning the repository:
 
@@ -88,7 +119,6 @@ pg-qperf-compare/
 │   └── test_metrics.py
 ├── examples/          # Example queries and configs
 └── requirements.txt   # Project dependencies
-```
 
 ## Installation
 

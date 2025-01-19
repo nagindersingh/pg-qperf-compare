@@ -12,6 +12,35 @@ A powerful tool for analyzing and comparing PostgreSQL query performance, helpin
 - Smart index recommendations based on query patterns
 - Export raw data in JSON format for further analysis
 
+## Development Setup
+
+### Git Hooks
+The project uses git hooks to ensure code quality. After cloning the repository:
+
+1. The pre-commit hook will automatically run tests before each commit:
+   ```bash
+   # The hook will:
+   - Run pytest
+   - Block the commit if any tests fail
+   - Allow the commit if all tests pass
+   ```
+
+2. If you need to bypass the pre-commit hook in exceptional cases:
+   ```bash
+   git commit --no-verify -m "Your commit message"
+   ```
+
+### Running Tests
+Tests can be run manually using:
+```bash
+python -m pytest
+```
+
+This will:
+- Run all test cases
+- Generate a coverage report
+- Show test execution summary
+
 ## Performance Analysis
 The tool provides comprehensive analysis of:
 
@@ -140,19 +169,6 @@ The HTML report provides:
    - Index suggestions
    - Query structure improvements
    - Configuration adjustments
-
-## Testing
-
-The project uses pytest for testing. The test suite includes:
-
-- Unit tests for all core components
-- Integration tests for database operations
-- Fixtures for common test scenarios
-
-Run tests with:
-```bash
-pytest tests/
-```
 
 ## Contributing
 

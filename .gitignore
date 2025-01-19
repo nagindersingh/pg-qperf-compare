@@ -19,7 +19,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+reports/
 # Virtual Environment
 venv/
 env/
@@ -68,5 +68,4 @@ config.yaml
 config/*.yml
 config/*.yaml
 !examples/config.yml
-reports/
 *.html

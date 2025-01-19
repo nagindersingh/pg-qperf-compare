@@ -2014,7 +2014,7 @@ class QueryAnalyzer:
             html.append("<p>No issues found.</p>")
         else:
             # High Severity Issues
-            high_severity = [p for p in original_problems if p['severity'] == 'HIGH']
+            high_severity = [p for p in original_problems if p['severity'] == 'high']
             if high_severity:
                 html.append("<h4>HIGH Severity Issues</h4>")
                 html.append("<ul>")
@@ -2023,7 +2023,7 @@ class QueryAnalyzer:
                 html.append("</ul>")
             
             # Medium Severity Issues
-            medium_severity = [p for p in original_problems if p['severity'] == 'MEDIUM']
+            medium_severity = [p for p in original_problems if p['severity'] == 'medium']
             if medium_severity:
                 html.append("<h4>MEDIUM Severity Issues</h4>")
                 html.append("<ul>")
@@ -2037,7 +2037,7 @@ class QueryAnalyzer:
             html.append("<p>No issues found.</p>")
         else:
             # High Severity Issues
-            high_severity = [p for p in optimized_problems if p['severity'] == 'HIGH']
+            high_severity = [p for p in optimized_problems if p['severity'] == 'high']
             if high_severity:
                 html.append("<h4>HIGH Severity Issues</h4>")
                 html.append("<ul>")
@@ -2046,7 +2046,7 @@ class QueryAnalyzer:
                 html.append("</ul>")
             
             # Medium Severity Issues
-            medium_severity = [p for p in optimized_problems if p['severity'] == 'MEDIUM']
+            medium_severity = [p for p in optimized_problems if p['severity'] == 'medium']
             if medium_severity:
                 html.append("<h4>MEDIUM Severity Issues</h4>")
                 html.append("<ul>")
